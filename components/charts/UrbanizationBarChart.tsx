@@ -25,26 +25,24 @@ interface IndicatorMapping {
 
 // Indicator mapping matching the notebook
 const indicatorMap: IndicatorMapping[] = [
-  { displayName: 'Militarization_Index', csvKey: 'militarisation' },
-  { displayName: 'weapons exports', csvKey: 'weaponsExports' },
-  { displayName: 'weapons imports', csvKey: 'weaponsImports' },
-  { displayName: 'nuclear and heavy weapons', csvKey: 'nuclearHeavyWeapons' },
-  { displayName: 'overall score', csvKey: 'overallScore' },
+  { displayName: 'violence score', csvKey: 'overallScore' },
   { displayName: 'ongoing conflict', csvKey: 'ongoingConflict' },
-  { displayName: 'Neighbouring countries relations', csvKey: 'neighbouringCountriesRelations' },
   { displayName: 'Political instability', csvKey: 'politicalInstability' },
   { displayName: 'intensity of internal conflict', csvKey: 'intensityOfInternalConflict' },
   { displayName: 'Instability_Index', csvKey: 'internalPeace' },
+  { displayName: 'defense capacity', csvKey: 'militarisation' },
+  { displayName: 'weapons exports', csvKey: 'weaponsExports' },
+  { displayName: 'weapons imports', csvKey: 'weaponsImports' },
+  { displayName: 'nuclear and heavy weapons', csvKey: 'nuclearHeavyWeapons' },
 ]
 
 // "Higher is worse" indicators - when these increase, conditions worsen
 const higherIsWorse = new Set([
   'Instability_Index',
   'ongoing conflict',
-  'Neighbouring countries relations',
   'intensity of internal conflict',
   'Political instability',
-  'overall score'
+  'violence score'
 ])
 
 interface ChartDataPoint {
@@ -174,16 +172,10 @@ export function UrbanizationBarChart({ data }: UrbanizationBarChartProps) {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const isWorse = higherIsWorse.has(label)
       return (
         <div className="bg-popover border border-border rounded-lg p-3 shadow-xl">
           <div className="text-sm font-semibold text-popover-foreground mb-2">
             {label}
-          </div>
-          <div className="text-xs mb-2">
-            <span className={isWorse ? 'text-red-500' : 'text-green-500'}>
-              {isWorse ? '↓ lower = better' : '↑ higher = better'}
-            </span>
           </div>
           <div className="text-xs text-muted-foreground space-y-1">
             {payload.map((entry: any, index: number) => (
@@ -200,8 +192,6 @@ export function UrbanizationBarChart({ data }: UrbanizationBarChartProps) {
   }
 
   const CustomXAxisTick = ({ x, y, payload }: any) => {
-    const isWorse = higherIsWorse.has(payload.value)
-    
     // Split long labels into multiple lines (max 20 chars per line)
     const words = payload.value.split(' ')
     const lines: string[] = []
@@ -219,17 +209,6 @@ export function UrbanizationBarChart({ data }: UrbanizationBarChartProps) {
     
     return (
       <g transform={`translate(${x},${y})`}>
-        {/* Arrow indicator */}
-        <text
-          x={0}
-          y={-5}
-          textAnchor="middle"
-          fontSize={16}
-          fontWeight="bold"
-          fill={isWorse ? '#dc2626' : '#16a34a'}
-        >
-          {isWorse ? '↓' : '↑'}
-        </text>
         {/* Multi-line label */}
         {lines.map((line, index) => (
           <text
@@ -267,9 +246,7 @@ export function UrbanizationBarChart({ data }: UrbanizationBarChartProps) {
           Comparison of Normalized Indicator Scores by Urbanization Level
         </CardTitle>
         <CardDescription className="text-muted-foreground mt-1">
-          Each indicator is normalized independently to 0-1 scale. 
-          <span className="text-green-500 ml-2">↑ higher = better</span>
-          <span className="text-red-500 ml-2">↓ lower = better</span>
+          Each indicator is normalized independently to 0-1 scale.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
