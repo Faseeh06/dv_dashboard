@@ -29,9 +29,9 @@ interface IndicatorOption {
 
 // Indicator options matching the bar chart
 const indicatorOptions: IndicatorOption[] = [
-  { label: 'Militarization_Index', key: 'militarisation' },
+  { label: 'defense capacity', key: 'militarisation' },
   { label: 'nuclear and heavy weapons', key: 'nuclearHeavyWeapons' },
-  { label: 'overall score', key: 'overallScore' },
+  { label: 'violence score', key: 'overallScore' },
   { label: 'ongoing conflict', key: 'ongoingConflict' },
   { label: 'Instability_Index', key: 'internalPeace' },
 ]
@@ -74,7 +74,7 @@ function calculateCorrelation(points: { x: number; y: number }[]): number {
 }
 
 export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
-  const [selectedIndicator, setSelectedIndicator] = useState(2) // 'overall score'
+  const [selectedIndicator, setSelectedIndicator] = useState(2) // 'violence score'
 
   // Perform clustering once
   const countryProfiles = useMemo(() => clusterCountries(data), [data])
@@ -89,7 +89,9 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
         allTrend: null,
         stableTrend: null,
         volatileTrend: null,
-        correlations: { global: 0, stable: 0, volatile: 0 }
+        correlations: { global: 0, stable: 0, volatile: 0 },
+        xDomain: [0, 100],
+        yDomain: [0, 1]
       }
     }
 
@@ -124,13 +126,25 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
         allTrend: null,
         stableTrend: null,
         volatileTrend: null,
-        correlations: { global: 0, stable: 0, volatile: 0 }
+        correlations: { global: 0, stable: 0, volatile: 0 },
+        xDomain: [0, 100],
+        yDomain: [0, 1]
       }
     }
 
+    // Calculate global min/max for consistent scales across all charts
+    const minX = Math.min(...allPoints.map(p => p.x))
+    const maxX = Math.max(...allPoints.map(p => p.x))
+    const minY = Math.min(...allPoints.map(p => p.y))
+    const maxY = Math.max(...allPoints.map(p => p.y))
+    
+    // Add padding to domains
+    const xDomain = [minX - 5, maxX + 5]
+    const yDomain = [minY - 0.5, maxY + 0.5]
+
     // Calculate trendlines
-    const minX = Math.min(...allPoints.map(p => p.x)) - 5
-    const maxX = Math.max(...allPoints.map(p => p.x)) + 5
+    const trendMinX = minX - 5
+    const trendMaxX = maxX + 5
 
     let allTrend = null
     let stableTrend = null
@@ -139,24 +153,24 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
     if (allPoints.length >= 2) {
       const { slope, intercept } = linearRegression(allPoints)
       allTrend = [
-        { x: minX, y: slope * minX + intercept },
-        { x: maxX, y: slope * maxX + intercept },
+        { x: trendMinX, y: slope * trendMinX + intercept },
+        { x: trendMaxX, y: slope * trendMaxX + intercept },
       ]
     }
 
     if (stablePoints.length >= 2) {
       const { slope, intercept } = linearRegression(stablePoints)
       stableTrend = [
-        { x: minX, y: slope * minX + intercept },
-        { x: maxX, y: slope * maxX + intercept },
+        { x: trendMinX, y: slope * trendMinX + intercept },
+        { x: trendMaxX, y: slope * trendMaxX + intercept },
       ]
     }
 
     if (volatilePoints.length >= 2) {
       const { slope, intercept } = linearRegression(volatilePoints)
       volatileTrend = [
-        { x: minX, y: slope * minX + intercept },
-        { x: maxX, y: slope * maxX + intercept },
+        { x: trendMinX, y: slope * trendMinX + intercept },
+        { x: trendMaxX, y: slope * trendMaxX + intercept },
       ]
     }
 
@@ -167,7 +181,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
       volatile: calculateCorrelation(volatilePoints),
     }
 
-    return { allPoints, stablePoints, volatilePoints, allTrend, stableTrend, volatileTrend, correlations }
+    return { allPoints, stablePoints, volatilePoints, allTrend, stableTrend, volatileTrend, correlations, xDomain, yDomain }
   }, [countryProfiles, selectedIndicator])
 
   // Custom tooltip for each chart
@@ -221,15 +235,15 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
     )
   }
 
-  const { allPoints, stablePoints, volatilePoints, allTrend, stableTrend, volatileTrend, correlations } = scatterData
+  const { allPoints, stablePoints, volatilePoints, allTrend, stableTrend, volatileTrend, correlations, xDomain, yDomain } = scatterData
 
-  // Check if current indicator is "overall score" or "ongoing conflict" and determine colors
+  // Check if current indicator is "violence score" or "ongoing conflict" and determine colors
   const currentKey = indicatorOptions[selectedIndicator].key
   const isOverallScore = currentKey === 'overallScore'
   const isOngoingConflict = currentKey === 'ongoingConflict'
   const isInstabilityIndex = currentKey === 'internalPeace'
   
-  // For overall score: negative correlation = good (green), positive = bad (red)
+  // For violence score: negative correlation = good (green), positive = bad (red)
   // Each cluster gets its own color based on ITS correlation
   // For ongoing conflict and instability index: volatile countries are always red
   const globalColor = isOverallScore && correlations.global > 0 ? '#DC0000' : '#b6ed7a'
@@ -293,7 +307,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <XAxis
                     type="number"
                     dataKey="x"
-                    domain={['dataMin - 5', 'dataMax + 5']}
+                    domain={xDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
@@ -308,7 +322,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <YAxis
                     type="number"
                     dataKey="y"
-                    domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                    domain={yDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
@@ -375,7 +389,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <XAxis
                     type="number"
                     dataKey="x"
-                    domain={['dataMin - 5', 'dataMax + 5']}
+                    domain={xDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
@@ -390,7 +404,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <YAxis
                     type="number"
                     dataKey="y"
-                    domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                    domain={yDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
@@ -450,7 +464,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <XAxis
                     type="number"
                     dataKey="x"
-                    domain={['dataMin - 5', 'dataMax + 5']}
+                    domain={xDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
@@ -465,7 +479,7 @@ export function PeaceParadoxScatter({ data }: PeaceParadoxScatterProps) {
                   <YAxis
                     type="number"
                     dataKey="y"
-                    domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                    domain={yDomain}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={{ stroke: 'rgba(0,0,0,0.3)', strokeWidth: 1 }}
                     tickLine={false}
