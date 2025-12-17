@@ -3,7 +3,7 @@ import { FlipChartContainer } from '@/components/charts/FlipChartContainer'
 import { UrbanizationBarChart } from '@/components/charts/UrbanizationBarChart'
 import { PeaceParadoxScatter } from '@/components/charts/PeaceParadoxScatter'
 import { loadData } from '@/lib/loadData'
-import { GlobeGLViewer } from '@/components/globe-gl-viewer'
+import { ClusterGlobeViewer } from '@/components/cluster-globe-viewer'
 import { ParticlesBackground } from '@/components/particles-background'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DashboardHeader, SectionHeader } from '@/components/dashboard-header'
@@ -90,16 +90,7 @@ export default async function Page() {
               </div>
             </div>
 
-            {/* Section 1: Global Overview */}
-            <div id="overview" className="px-4 lg:px-6 scroll-mt-8">
-              <SectionHeader 
-                title="Global Overview"
-                description="Interactive 3D visualization of global economic and demographic data"
-              />
-              <GlobeGLViewer data={records} />
-            </div>
-            
-            {/* Section 2: Security Indicators - Group Bar Chart */}
+            {/* Section 1: Security Indicators - Group Bar Chart */}
             <div id="security" className="px-4 lg:px-6 scroll-mt-8">
               <SectionHeader 
                 title="Security Indicators"
@@ -108,7 +99,7 @@ export default async function Page() {
               <UrbanizationBarChart data={records} />
             </div>
 
-            {/* Section 3: Correlation Deep Dive */}
+            {/* Section 2: Correlation Deep Dive */}
             <div id="analysis" className="px-4 lg:px-6 scroll-mt-8">
               <SectionHeader 
                 title="Correlation Deep Dive"
@@ -117,7 +108,7 @@ export default async function Page() {
               <PeaceParadoxScatter data={records} />
             </div>
 
-            {/* Section 4: Crime & Safety Analysis */}
+            {/* Section 3: Crime & Safety Analysis */}
             <div id="crime" className="px-4 lg:px-6 scroll-mt-8">
               <SectionHeader 
                 title="Crime & Safety Analysis"
@@ -126,13 +117,22 @@ export default async function Page() {
               <CrimeHeatmap data={crimeData} />
             </div>
 
-            {/* Section 5: Environmental Impact */}
+            {/* Section 4: Environmental Impact */}
             <div id="environment" className="px-4 lg:px-6 scroll-mt-8">
               <SectionHeader 
                 title="Environmental Impact"
                 description="Carbon emissions and renewable energy consumption patterns"
               />
               <FlipChartContainer data={records} />
+            </div>
+
+            {/* Section 5: Global Cluster Visualization */}
+            <div id="clusters" className="px-4 lg:px-6 scroll-mt-8">
+              <SectionHeader 
+                title="Global Cluster Visualization"
+                description="Interactive 3D globe showing country clusters based on K-Means analysis"
+              />
+              <ClusterGlobeViewer data={records} />
             </div>
           </div>
         </div>

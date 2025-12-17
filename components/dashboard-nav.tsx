@@ -4,15 +4,15 @@ import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 
 const sections = [
-  { id: 'overview', label: 'Global Overview' },
-  { id: 'crime', label: 'Crime & Safety' },
-  { id: 'environment', label: 'Environment' },
   { id: 'security', label: 'Security' },
   { id: 'analysis', label: 'Deep Dive' },
+  { id: 'crime', label: 'Crime & Safety' },
+  { id: 'environment', label: 'Environment' },
+  { id: 'clusters', label: 'Global Clusters' },
 ]
 
 export function DashboardNav() {
-  const [activeSection, setActiveSection] = useState('overview')
+  const [activeSection, setActiveSection] = useState('security')
 
   const scrollToSection = (id: string) => {
     setActiveSection(id)

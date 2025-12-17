@@ -77,7 +77,14 @@ const normalizeCountryName = (name: string): string => {
   return countryNameMap[name] || name
 }
 
-type ViewMode = 'growth' | 'absolute'
+type ViewMode = 'growth' | 'absolute' | 'cluster'
+
+// Cluster colors (matching Correlation Deep Dive)
+const CLUSTER_COLORS = {
+  'Stable Urbanizers': '#7fc341',
+  'Volatile Urbanizers': '#9bdf57',
+  'Unknown': 'rgba(80, 80, 80, 0.6)',
+}
 
 // Monochromatic Heat Map: Blue for decline, Orange-Red gradient for growth
 // Blue shades for negative, warm orange-red shades for positive
@@ -215,9 +222,11 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         // Calculate percentile within this year
         const percentile = getPercentile(gdp)
         
-        // Get colors for both modes
+        // Get colors for all modes
         const growthColor = getGrowthColor(growthPercent)
         const percentileColor = getPercentileColor(percentile)
+        const clusterLabel = record.clusterLabel || 'Unknown'
+        const clusterColor = CLUSTER_COLORS[clusterLabel as keyof typeof CLUSTER_COLORS] || CLUSTER_COLORS['Unknown']
         
         countryMap.set(record.country, {
           ...record,
@@ -225,6 +234,8 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
           percentile,
           growthColor,
           percentileColor,
+          clusterColor,
+          clusterLabel,
           baseGDP,
         })
       })
@@ -317,13 +328,19 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
       .sort((a, b) => b.growthPercent - a.growthPercent)
       .slice(0, 3)
     
+    // Count clusters
+    const stableCount = countryData.filter(d => d.clusterLabel === 'Stable Urbanizers').length
+    const volatileCount = countryData.filter(d => d.clusterLabel === 'Volatile Urbanizers').length
+    
     return { 
       total, 
       avgGrowth, 
       maxGrowth, 
       minGrowth, 
       count: countryData.length,
-      topGrowers 
+      topGrowers,
+      stableCount,
+      volatileCount
     }
   }, [currentYearCountryData])
 
@@ -405,7 +422,12 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         feat.properties.growthPercent = countryData.growthPercent
         feat.properties.percentile = countryData.percentile
         feat.properties.baseGDP = countryData.baseGDP
-        feat.properties.color = viewMode === 'growth' ? countryData.growthColor : countryData.percentileColor
+        feat.properties.clusterLabel = countryData.clusterLabel
+        feat.properties.color = viewMode === 'growth' 
+          ? countryData.growthColor 
+          : viewMode === 'absolute' 
+            ? countryData.percentileColor 
+            : countryData.clusterColor
         feat.properties.urbanPopPerc = countryData.urbanPopPerc
         feat.properties.popDensSqKm = countryData.popDensSqKm
         feat.properties.totalPop = countryData.totalPop
@@ -416,6 +438,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         feat.properties.color = null
         feat.properties.country = null
         feat.properties.growthPercent = null
+        feat.properties.clusterLabel = null
       }
     })
 
@@ -433,8 +456,23 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         const baseGDPFormatted = props.baseGDP ? formatGDP(props.baseGDP) : 'N/A'
         const growthFormatted = props.growthPercent !== undefined ? formatGrowth(props.growthPercent) : 'N/A'
         const popFormatted = props.totalPop ? `${(props.totalPop / 1e6).toFixed(2)}M` : 'N/A'
+        const urbanFormatted = props.urbanPopPerc ? `${props.urbanPopPerc.toFixed(1)}%` : 'N/A'
         
         const growthColor = props.growthPercent >= 0 ? '#4ade80' : '#f87171'
+        const clusterBadge = props.clusterLabel ? `
+          <div style="
+            display: inline-block;
+            padding: 4px 12px;
+            background: ${props.color};
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #000;
+          ">
+            ${props.clusterLabel}
+          </div>
+        ` : ''
         
         return `
           <div style="
@@ -451,6 +489,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
             <div style="font-weight: 700; font-size: 16px; margin-bottom: 10px; color: ${props.color};">
               ${props.country}
             </div>
+            ${clusterBadge}
             <div style="
               display: inline-block;
               padding: 4px 12px;
@@ -476,6 +515,10 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
               <span style="font-weight: 600;">${popFormatted}</span>
             </div>
             <div style="margin: 6px 0; display: flex; justify-content: space-between;">
+              <span style="opacity: 0.7;">Urbanization:</span> 
+              <span style="font-weight: 600;">${urbanFormatted}</span>
+            </div>
+            <div style="margin: 6px 0; display: flex; justify-content: space-between;">
               <span style="opacity: 0.7;">Rank (percentile):</span> 
               <span style="font-weight: 600;">Top ${(100 - (props.percentile || 0)).toFixed(0)}%</span>
             </div>
@@ -493,7 +536,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
     <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-lg">
       <CardContent className="pt-6">
         {/* View Mode Toggle */}
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex gap-2 flex-wrap">
           <button
             onClick={() => setViewMode('growth')}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -513,6 +556,16 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
             }`}
           >
             GDP Ranking (Percentile)
+          </button>
+          <button
+            onClick={() => setViewMode('cluster')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              viewMode === 'cluster'
+                ? 'bg-[#7fc341] text-black'
+                : 'bg-muted/50 text-foreground hover:bg-muted'
+            }`}
+          >
+            Country Clusters
           </button>
         </div>
 
@@ -615,7 +668,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         </div>
 
         {/* Year Stats */}
-        {yearStats && (
+        {yearStats && viewMode !== 'cluster' && (
           <div className="mb-4 grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Years Since {baseYear}</div>
@@ -638,6 +691,43 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
             <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Countries</div>
               <div className="text-lg font-bold text-foreground">{yearStats.count}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Cluster Stats */}
+        {yearStats && viewMode === 'cluster' && (
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg border-2" style={{ 
+              backgroundColor: `${CLUSTER_COLORS['Stable Urbanizers']}15`,
+              borderColor: CLUSTER_COLORS['Stable Urbanizers']
+            }}>
+              <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: CLUSTER_COLORS['Stable Urbanizers'] }}>
+                Stable Urbanizers
+              </div>
+              <div className="text-3xl font-bold text-foreground mb-1">{yearStats.stableCount}</div>
+              <div className="text-xs text-muted-foreground">
+                {((yearStats.stableCount / yearStats.count) * 100).toFixed(1)}% of countries
+              </div>
+            </div>
+            <div className="p-4 rounded-lg border-2" style={{ 
+              backgroundColor: `${CLUSTER_COLORS['Volatile Urbanizers']}15`,
+              borderColor: CLUSTER_COLORS['Volatile Urbanizers']
+            }}>
+              <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: CLUSTER_COLORS['Volatile Urbanizers'] }}>
+                Volatile Urbanizers
+              </div>
+              <div className="text-3xl font-bold text-foreground mb-1">{yearStats.volatileCount}</div>
+              <div className="text-xs text-muted-foreground">
+                {((yearStats.volatileCount / yearStats.count) * 100).toFixed(1)}% of countries
+              </div>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg border border-border/30">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Total Countries</div>
+              <div className="text-3xl font-bold text-foreground mb-1">{yearStats.count}</div>
+              <div className="text-xs text-muted-foreground">
+                Data for {selectedYear}
+              </div>
             </div>
           </div>
         )}
@@ -677,7 +767,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
           {/* Legend */}
           <div className="absolute bottom-4 right-4 bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg p-4 shadow-xl z-10 min-w-[260px]">
             <div className="text-sm font-bold text-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
-              {viewMode === 'growth' ? 'GDP Growth Since ' + baseYear : 'GDP Ranking'}
+              {viewMode === 'growth' ? 'GDP Growth Since ' + baseYear : viewMode === 'absolute' ? 'GDP Ranking' : 'Country Clusters'}
             </div>
             
             {viewMode === 'growth' ? (
@@ -725,7 +815,7 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
                   </div>
                 </div>
               </>
-            ) : (
+            ) : viewMode === 'absolute' ? (
               <>
                 <div className="mb-3">
                   <div className="h-6 rounded-md overflow-hidden flex shadow-inner">
@@ -741,6 +831,38 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
                   Colors show GDP ranking within the current year (percentile-based)
                 </div>
               </>
+            ) : (
+              <>
+                <div className="space-y-3 text-sm">
+                  <div className="p-3 rounded-lg border-2" style={{ 
+                    backgroundColor: `${CLUSTER_COLORS['Stable Urbanizers']}20`,
+                    borderColor: CLUSTER_COLORS['Stable Urbanizers']
+                  }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-4 h-4 rounded shadow-sm" style={{ backgroundColor: CLUSTER_COLORS['Stable Urbanizers'] }} />
+                      <span className="font-bold text-foreground">Stable Urbanizers</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Countries with higher urbanization, lower inequality (Gini), and better peace scores. Typically developed nations with stable institutions.
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg border-2" style={{ 
+                    backgroundColor: `${CLUSTER_COLORS['Volatile Urbanizers']}20`,
+                    borderColor: CLUSTER_COLORS['Volatile Urbanizers']
+                  }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-4 h-4 rounded shadow-sm" style={{ backgroundColor: CLUSTER_COLORS['Volatile Urbanizers'] }} />
+                      <span className="font-bold text-foreground">Volatile Urbanizers</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Countries with ongoing urbanization, higher inequality, and lower peace scores. Often developing nations with rapid change.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/30 text-xs text-muted-foreground">
+                  Clusters determined by K-Means analysis of 53 socioeconomic indicators
+                </div>
+              </>
             )}
           </div>
           
@@ -754,31 +876,63 @@ export function GlobeGLViewer({ data }: GlobeGLViewerProps) {
         {/* Info Section */}
         <div className="mt-4 p-5 bg-gradient-to-br from-background/50 to-background/30 rounded-xl border-2 border-border/30">
           <div className="text-base font-bold text-foreground mb-3 uppercase tracking-wide">
-            Heat Map Color Guide
+            {viewMode === 'cluster' ? 'Understanding Country Clusters' : 'Visualization Guide'}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="flex items-start gap-2">
-              <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#DC2626' }}></div>
-              <div>
-                <div className="font-semibold text-foreground">Dark Red = Very High Growth</div>
-                <div className="text-muted-foreground">+120% or more (over doubled their GDP)</div>
+          {viewMode === 'cluster' ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Countries are automatically grouped into two clusters using K-Means machine learning algorithm 
+                based on 53 socioeconomic indicators including urbanization, peace scores, inequality, 
+                economic development, and environmental factors.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <div className="font-semibold text-foreground mb-1" style={{ color: CLUSTER_COLORS['Stable Urbanizers'] }}>
+                    Stable Urbanizers
+                  </div>
+                  <p className="text-xs">
+                    Characterized by: Lower Global Peace Index scores (more peaceful), 
+                    lower Gini coefficients (less inequality), higher urbanization rates, 
+                    and better overall stability metrics.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <div className="font-semibold text-foreground mb-1" style={{ color: CLUSTER_COLORS['Volatile Urbanizers'] }}>
+                    Volatile Urbanizers
+                  </div>
+                  <p className="text-xs">
+                    Characterized by: Higher Global Peace Index scores (less peaceful), 
+                    higher Gini coefficients (more inequality), rapid urbanization transitions, 
+                    and developing economic structures.
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-2">
-              <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#FB923C' }}></div>
-              <div>
-                <div className="font-semibold text-foreground">Orange = Good to Strong Growth</div>
-                <div className="text-muted-foreground">+30% to +90% (healthy expansion)</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#DC2626' }}></div>
+                <div>
+                  <div className="font-semibold text-foreground">Dark Red = Very High Growth</div>
+                  <div className="text-muted-foreground">+120% or more (over doubled their GDP)</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#FB923C' }}></div>
+                <div>
+                  <div className="font-semibold text-foreground">Orange = Good to Strong Growth</div>
+                  <div className="text-muted-foreground">+30% to +90% (healthy expansion)</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#4682B4' }}></div>
+                <div>
+                  <div className="font-semibold text-foreground">Blue = Low Growth or Decline</div>
+                  <div className="text-muted-foreground">Below +30% or negative growth</div>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-2">
-              <div className="w-3 h-3 rounded-full mt-0.5" style={{ backgroundColor: '#4682B4' }}></div>
-              <div>
-                <div className="font-semibold text-foreground">Blue = Low Growth or Decline</div>
-                <div className="text-muted-foreground">Below +30% or negative growth</div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>
